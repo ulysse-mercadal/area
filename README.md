@@ -80,7 +80,7 @@ Flow Connect currently supports the following services:
 
 ## 🤝 Contributing
 
-We welcome contributions! Please read our [Contributing Guidelines](./Contribute.md) to get started.
+We welcome contributions! Please read our [Contributing Guidelines](./HOWTOCONTRIBUTE.md) to get started.
 
 ---
 

@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Action {
+  id           Int      @id @default(autoincrement())
+  name         String   @unique
+  description  String?
+  configSchema Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Reaction {
+  id           Int      @id @default(autoincrement())
+  name         String   @unique
+  description  String?
+  configSchema Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Credential {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  serviceId    Int
+  token        String
+  refreshToken String?
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, serviceId])
+  @@index([userId])
+  @@index([serviceId])
+}
+
+model DiscordUser {
+  id            Int      @id @default(autoincrement())
+  userId        Int      @unique
+  discordUserId String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  guilds        DiscordGuild[]
+
+  @@index([userId])
+  @@index([discordUserId])
+}
+
+model DiscordGuild {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  guildId         String
+  guildName       String?
+  addedAt         DateTime @default(now())
+
+  discordUser     DiscordUser @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([userId, guildId])
+  @@index([userId])
+  @@index([guildId])
+}
+
+model DiscordWebhook {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  channelId    String
+  webhookId    String
+  webhookToken String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([webhookId])
+  @@index([userId])
+  @@index([channelId])
+}

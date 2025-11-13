@@ -1,0 +1,220 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  SERVICE
+}
+
+enum LogicType {
+  IF
+  AND
+  NOT
+}
+
+enum ExecutionStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+model ApiKey {
+  id                Int                 @id @default(autoincrement())
+  key               String              @unique
+  name              String
+  isActive          Boolean             @default(true)
+
+  services          Service[]
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  lastUsedAt        DateTime?
+}
+
+model Service {
+  id              Int           @id @default(autoincrement())
+  name            String        @unique
+  microServiceUrl String
+  iconUrl         String?
+
+  apiKeyId        Int
+  apiKey          ApiKey        @relation(fields: [apiKeyId], references: [id])
+  isActive        Boolean       @default(true)
+
+  credentials     Credentials[]
+  actions         Actions[]
+  reactions       Reactions[]
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  lastSeenAt      DateTime?
+}
+
+model User {
+  id                Int                 @id @default(autoincrement())
+  email             String              @unique
+  pwd_hash          String
+  name              String
+  surname           String
+  role              Role                @default(USER)
+  credentials       Credentials[]
+  workflows         Workflow[]
+
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+}
+
+model Credentials {
+  id                Int                 @id @default(autoincrement())
+  token             String
+  lastUsed          DateTime            @default(now())
+  refreshToken      String?
+  expiresAt         DateTime?
+  userId            Int
+  serviceId         Int
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service           Service             @relation(fields: [serviceId], references: [id])
+
+  @@unique([userId, serviceId])
+  @@index([userId])
+  @@index([serviceId])
+}
+
+model Actions {
+  id                Int                 @id @default(autoincrement())
+  name              String
+  serviceId         Int
+  description       String?
+  configSchema      Json?
+
+  service           Service             @relation(fields: [serviceId], references: [id])
+  nodes             Node[]
+
+  @@unique([name, serviceId])
+  @@index([serviceId])
+}
+
+model Reactions {
+  id                Int                 @id @default(autoincrement())
+  name              String
+  serviceId         Int
+  description       String?
+  configSchema      Json?
+
+  service           Service             @relation(fields: [serviceId], references: [id])
+  nodes             Node[]
+
+  @@unique([name, serviceId])
+  @@index([serviceId])
+}
+
+model Workflow {
+  id                Int                 @id @default(autoincrement())
+  name              String
+  description       String?
+  isActive          Boolean             @default(true)
+  userId            Int
+  lastTriggered     DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nodes             Node[]
+  nodeConnections   NodeConnection[]
+  executions        WorkflowExecution[]
+
+  @@index([userId, isActive])
+  @@index([lastTriggered])
+}
+
+model Node {
+  id                Int                 @id @default(autoincrement())
+  name              String?
+  workflowId        Int
+  actionId          Int?
+  reactionId        Int?
+  logicType         LogicType?
+
+  conf              Json?
+  isTriggered       Boolean             @default(false)
+  lastExecuted      DateTime?
+  executionCount    Int                 @default(0)
+  positionX         Float?
+  positionY         Float?
+
+  workflow          Workflow            @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  action            Actions?            @relation(fields: [actionId], references: [id])
+  reaction          Reactions?          @relation(fields: [reactionId], references: [id])
+  outConnect        NodeConnection[]    @relation("SourceNode")
+  inConnect         NodeConnection[]    @relation("TargetNode")
+  executions        NodeExecution[]
+  triggeredExecutions WorkflowExecution[] @relation("TriggerNode")
+
+  @@index([workflowId])
+  @@index([actionId])
+  @@index([reactionId])
+  @@index([workflowId, isTriggered])
+}
+
+model NodeConnection {
+  id                Int                 @id @default(autoincrement())
+  sourceNodeId      Int
+  targetNodeId      Int
+  workflowId        Int
+  condition         Json?
+  channel           String              @default("success")
+
+  sourceNode        Node                @relation("SourceNode", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  targetNode        Node                @relation("TargetNode", fields: [targetNodeId], references: [id], onDelete: Cascade)
+  workflow          Workflow            @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceNodeId, targetNodeId, channel])
+  @@index([workflowId])
+  @@index([sourceNodeId])
+  @@index([targetNodeId])
+  @@index([channel])
+}
+
+model WorkflowExecution {
+  id                Int                 @id @default(autoincrement())
+  workflowId        Int
+  triggeredBy       Int
+  status            ExecutionStatus     @default(RUNNING)
+  startedAt         DateTime            @default(now())
+  completedAt       DateTime?
+  errorMessage      String?
+
+  workflow          Workflow            @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  triggerNode       Node                @relation("TriggerNode", fields: [triggeredBy], references: [id])
+  nodeExecutions    NodeExecution[]
+
+  @@index([workflowId, startedAt])
+  @@index([triggeredBy])
+}
+
+model NodeExecution {
+  id                Int                 @id @default(autoincrement())
+  nodeId            Int
+  executionId       Int
+  status            ExecutionStatus     @default(PENDING)
+  startedAt         DateTime            @default(now())
+  completedAt       DateTime?
+  output            Json?
+  logs              String?
+  executionChannel  String?
+
+  node              Node                @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  execution         WorkflowExecution   @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId])
+  @@index([nodeId])
+}
