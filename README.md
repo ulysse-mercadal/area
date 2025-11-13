@@ -45,8 +45,8 @@ Flow Connect currently supports the following services:
 
 1.  Clone the repository:
     ```bash
-    git clone https://github.com/your-repo/AREA.git
-    cd AREA
+    git clone https://github.com/ulysse-mercadal/area.git
+    cd area
     ```
 2.  Create a `.env` file from the `.env.example` and fill in the required values.
 
