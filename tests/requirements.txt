@@ -1,0 +1,5 @@
+pytest
+requests
+dotenv
+psycopg2
+bcrypt

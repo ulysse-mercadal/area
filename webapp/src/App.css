@@ -1,0 +1,54 @@
+@import "tailwindcss";
+.app {
+  min-height: 100vh;
+  font-family: 'Sora', sans-serif;
+}
+
+.font-sora {
+  font-family: 'Sora', system-ui, -apple-system, sans-serif;
+}
+
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.card-shadow {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+}
+
+.card-shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+
+.bg-gradient-purple {
+  background: linear-gradient(135deg, #7F22FE 0%, #6918d4 100%);
+}
+
+.bg-gradient-gray {
+  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+}
+
+.text-gradient-purple {
+  background: linear-gradient(135deg, #7F22FE 0%, #6918d4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@media (max-width: 768px) {
+  .sidebar-mobile {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+  
+  .sidebar-mobile.open {
+    transform: translateX(0);
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
