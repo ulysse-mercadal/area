@@ -1,0 +1,374 @@
+services:
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PG_USER}
+      PGADMIN_DEFAULT_PASSWORD: ${PG_PASSWORD}
+    ports:
+      - "5050:80"
+    networks:
+      - app-network
+
+  database:
+    image: postgres:${POSTGRES_VERSION:-16}-alpine
+    environment:
+      - POSTGRES_DB=${DATABASE_NAME}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+      - POSTGRES_USER=${DATABASE_USERNAME}
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-d", "${DATABASE_NAME}", "-U", "${DATABASE_USERNAME}" ]
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - database_data:/var/lib/postgresql/data:rw
+    networks:
+      - app-network
+
+  server:
+    build: ./api
+    environment:
+      - API_PORT=${API_PORT}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}
+      - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}
+      - MICROSOFT_REDIRECT_URI=${MICROSOFT_REDIRECT_URI}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
+      - TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID}
+      - TWITCH_SECRET=${TWITCH_SECRET}
+      - TWITCH_REDIRECT_URI=${TWITCH_REDIRECT_URI}
+      - YOUTUBE_CLIENT_ID=${YOUTUBE_CLIENT_ID}
+      - YOUTUBE_CLIENT_SECRET=${YOUTUBE_CLIENT_SECRET}
+      - YOUTUBE_REDIRECT_URI=${YOUTUBE_REDIRECT_URI}
+
+    ports:
+      - "${API_PORT}:${API_PORT}"
+    expose:
+      - "${API_PORT}"
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${API_PORT}/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - app-network
+
+  client_mobile:
+    platform: linux/amd64
+    build: ./mobileapp
+    volumes:
+      - mobile-build:/app
+
+  client_web:
+    build: ./webapp
+    environment:
+      - VITE_API_URL=${API_URL}
+    ports:
+      - "${WEBAPP_PORT}:5173"
+    expose:
+      - "5173"
+    volumes:
+      - mobile-build:/app/public
+    networks:
+      - app-network
+    depends_on:
+      server:
+        condition: service_healthy
+      client_mobile:
+        condition: service_completed_successfully
+
+  spotify-database:
+    image: postgres:${POSTGRES_VERSION:-16}-alpine
+    container_name: spotify_postgres
+    environment:
+      - POSTGRES_DB=${SPOTIFY_DATABASE_NAME}
+      - POSTGRES_PASSWORD=${SPOTIFY_DATABASE_PASSWORD}
+      - POSTGRES_USER=${SPOTIFY_DATABASE_USERNAME}
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-d", "${SPOTIFY_DATABASE_NAME}", "-U", "${SPOTIFY_DATABASE_USERNAME}" ]
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - spotify_database_data:/var/lib/postgresql/data:rw
+    ports:
+      - "5433:5432"
+    networks:
+      - app-network
+
+  spotify-service:
+    build: ./micro_services/spotify
+    container_name: spotify_microservice
+    environment:
+      - DATABASE_URL=postgresql://${SPOTIFY_DATABASE_USERNAME}:${SPOTIFY_DATABASE_PASSWORD}@spotify-database:5432/${SPOTIFY_DATABASE_NAME}
+      - MAIN_API_URL=${MAIN_API_URL}
+      - API_KEY=${API_KEY}
+      - SERVICE_NAME=SPOTIFY
+      - MICROSERVICE_URL=http://spotify-service:3001
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
+      - PORT=${SPOTIFY_PORT}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - SERVICE_ICON_URL=${SPOTIFY_ICON_URL}
+    ports:
+      - '${SPOTIFY_PORT}:${SPOTIFY_PORT}'
+    depends_on:
+      spotify-database:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  discord-database:
+    image: postgres:${POSTGRES_VERSION:-16}-alpine
+    container_name: discord_postgres
+    environment:
+      - POSTGRES_DB=${DISCORD_DATABASE_NAME}
+      - POSTGRES_PASSWORD=${DISCORD_DATABASE_PASSWORD}
+      - POSTGRES_USER=${DISCORD_DATABASE_USERNAME}
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-d", "${DISCORD_DATABASE_NAME}", "-U", "${DISCORD_DATABASE_USERNAME}" ]
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - discord_database_data:/var/lib/postgresql/data:rw
+    ports:
+      - "5437:5432"
+    networks:
+      - app-network
+
+  discord-service:
+    build: ./micro_services/discord
+    container_name: discord_microservice
+    environment:
+      - DATABASE_URL=postgresql://${DISCORD_DATABASE_USERNAME}:${DISCORD_DATABASE_PASSWORD}@discord-database:5432/${DISCORD_DATABASE_NAME}
+      - MAIN_API_URL=${MAIN_API_URL}
+      - API_KEY=${API_KEY}
+      - SERVICE_NAME=DISCORD
+      - MICROSERVICE_URL=http://discord-service:3005
+      - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
+      - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
+      - DISCORD_REDIRECT_URI=${DISCORD_REDIRECT_URI}
+      - DISCORD_BOT_LINK=${DISCORD_BOT_LINK}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - PORT=${DISCORD_PORT}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - SERVICE_ICON_URL=${DISCORD_ICON_URL}
+    ports:
+      - '${DISCORD_PORT}:${DISCORD_PORT}'
+    depends_on:
+      discord-database:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  youtube-database:
+    image: postgres:${POSTGRES_VERSION:-16}-alpine
+    container_name: youtube_postgres
+    environment:
+      - POSTGRES_DB=${YOUTUBE_DATABASE_NAME}
+      - POSTGRES_PASSWORD=${YOUTUBE_DATABASE_PASSWORD}
+      - POSTGRES_USER=${YOUTUBE_DATABASE_USERNAME}
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-d", "${YOUTUBE_DATABASE_NAME}", "-U", "${YOUTUBE_DATABASE_USERNAME}" ]
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - youtube_database_data:/var/lib/postgresql/data:rw
+    ports:
+      - "5435:5432"
+    networks:
+      - app-network
+
+  youtube-service:
+    build: ./micro_services/youtube
+    container_name: youtube_microservice
+    environment:
+      - DATABASE_URL=postgresql://${YOUTUBE_DATABASE_USERNAME}:${YOUTUBE_DATABASE_PASSWORD}@youtube-database:5432/${YOUTUBE_DATABASE_NAME}
+      - MAIN_API_URL=${MAIN_API_URL}
+      - API_KEY=${API_KEY}
+      - SERVICE_NAME=YOUTUBE
+      - MICROSERVICE_URL=http://youtube-service:3003
+      - YOUTUBE_CLIENT_ID=${YOUTUBE_CLIENT_ID}
+      - YOUTUBE_CLIENT_SECRET=${YOUTUBE_CLIENT_SECRET}
+      - YOUTUBE_REDIRECT_URI=${YOUTUBE_REDIRECT_URI}
+      - PORT=${YOUTUBE_PORT}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - SERVICE_ICON_URL=${YOUTUBE_ICON_URL}
+    ports:
+      - '${YOUTUBE_PORT}:${YOUTUBE_PORT}'
+    depends_on:
+      youtube-database:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  google-sheets-database:
+    image: postgres:${POSTGRES_VERSION:-16}-alpine
+    container_name: google-sheets_postgres
+    environment:
+      - POSTGRES_DB=${GOOGLE_SHEETS_DATABASE_NAME}
+      - POSTGRES_PASSWORD=${GOOGLE_SHEETS_DATABASE_PASSWORD}
+      - POSTGRES_USER=${GOOGLE_SHEETS_DATABASE_USERNAME}
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-d", "${GOOGLE_SHEETS_DATABASE_NAME}", "-U", "${GOOGLE_SHEETS_DATABASE_USERNAME}" ]
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - google_sheets_database_data:/var/lib/postgresql/data:rw
+    ports:
+      - "5434:5432"
+    networks:
+      - app-network
+
+  google-sheets-service:
+    build: ./micro_services/google_sheets
+    container_name: google-sheets_microservice
+    environment:
+      - DATABASE_URL=postgresql://${GOOGLE_SHEETS_DATABASE_USERNAME}:${GOOGLE_SHEETS_DATABASE_PASSWORD}@google-sheets-database:5432/${GOOGLE_SHEETS_DATABASE_NAME}
+      - MAIN_API_URL=${MAIN_API_URL}
+      - API_KEY=${API_KEY}
+      - SERVICE_NAME=GOOGLE-SHEETS
+      - MICROSERVICE_URL=http://google-sheets-service:3002
+      - GOOGLE_SHEETS_CLIENT_ID=${GOOGLE_SHEETS_CLIENT_ID}
+      - GOOGLE_SHEETS_CLIENT_SECRET=${GOOGLE_SHEETS_CLIENT_SECRET}
+      - GOOGLE_SHEETS_REDIRECT_URI=${GOOGLE_SHEETS_REDIRECT_URI}
+      - PORT=${GOOGLE_SHEETS_PORT}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - SERVICE_ICON_URL=${GOOGLE_SHEETS_ICON_URL}
+    ports:
+      - '${GOOGLE_SHEETS_PORT}:${GOOGLE_SHEETS_PORT}'
+    depends_on:
+      google-sheets-database:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  twitch-database:
+    image: postgres:${POSTGRES_VERSION:-16}-alpine
+    container_name: twitch_postgres
+    environment:
+      - POSTGRES_DB=${TWITCH_DATABASE_NAME}
+      - POSTGRES_PASSWORD=${TWITCH_DATABASE_PASSWORD}
+      - POSTGRES_USER=${TWITCH_DATABASE_USERNAME}
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-d", "${TWITCH_DATABASE_NAME}", "-U", "${TWITCH_DATABASE_USERNAME}" ]
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - twitch_database_data:/var/lib/postgresql/data:rw
+    ports:
+      - "5436:5432"
+    networks:
+      - app-network
+
+  twitch-service:
+    build: ./micro_services/twitch
+    container_name: twitch_microservice
+    environment:
+      - DATABASE_URL=postgresql://${TWITCH_DATABASE_USERNAME}:${TWITCH_DATABASE_PASSWORD}@twitch-database:5432/${TWITCH_DATABASE_NAME}
+      - MAIN_API_URL=${MAIN_API_URL}
+      - API_KEY=${API_KEY}
+      - SERVICE_NAME=twitch
+      - MICROSERVICE_URL=http://twitch-service:3004
+      - TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID}
+      - TWITCH_CLIENT_SECRET=${TWITCH_CLIENT_SECRET}
+      - TWITCH_REDIRECT_URI=${TWITCH_REDIRECT_URI}
+      - TWITCH_WEBHOOK_CALLBACK_URL=${TWITCH_WEBHOOK_CALLBACK_URL}
+      - TWITCH_WEBHOOK_SECRET=${TWITCH_WEBHOOK_SECRET}
+      - PORT=${TWITCH_PORT}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - SERVICE_ICON_URL=${TWITCH_ICON_URL}
+    ports:
+      - '${TWITCH_PORT}:${TWITCH_PORT}'
+    depends_on:
+      twitch-database:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  gmail-database:
+    image: postgres:${POSTGRES_VERSION:-16}-alpine
+    container_name: gmail_postgres
+    environment:
+      - POSTGRES_DB=${GMAIL_DATABASE_NAME}
+      - POSTGRES_PASSWORD=${GMAIL_DATABASE_PASSWORD}
+      - POSTGRES_USER=${GMAIL_DATABASE_USERNAME}
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-d", "${GMAIL_DATABASE_NAME}", "-U", "${GMAIL_DATABASE_USERNAME}" ]
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - gmail_database_data:/var/lib/postgresql/data:rw
+    ports:
+      - "5438:5432"
+    networks:
+      - app-network
+
+  gmail-service:
+    build: ./micro_services/gmail
+    container_name: gmail_microservice
+    environment:
+      - DATABASE_URL=postgresql://${GMAIL_DATABASE_USERNAME}:${GMAIL_DATABASE_PASSWORD}@gmail-database:5432/${GMAIL_DATABASE_NAME}
+      - MAIN_API_URL=${MAIN_API_URL}
+      - API_KEY=${API_KEY}
+      - SERVICE_NAME=GMAIL
+      - MICROSERVICE_URL=http://gmail-service:3006
+      - GMAIL_CLIENT_ID=${GMAIL_CLIENT_ID}
+      - GMAIL_CLIENT_SECRET=${GMAIL_CLIENT_SECRET}
+      - GMAIL_REDIRECT_URI=${GMAIL_REDIRECT_URI}
+      - PORT=${GMAIL_PORT}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - SERVICE_ICON_URL=${GMAIL_ICON_URL}
+    ports:
+      - '${GMAIL_PORT}:${GMAIL_PORT}'
+    depends_on:
+      gmail-database:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  database_data:
+  spotify_database_data:
+  discord_database_data:
+  google_sheets_database_data:
+  twitch_database_data:
+  gmail_database_data:
+  youtube_database_data:
+  mobile-build:
